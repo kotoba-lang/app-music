@@ -6,7 +6,7 @@
   device. Separated because a player that only plays should not be able to
   enumerate someone's library, and a library browser that never plays should
   not hold the audio device."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [mokuroku.item :as item]
             [mokuroku.source :as source]))
 
