@@ -38,8 +38,8 @@ the total as a lower bound instead of stating it as fact.
 ## Test
 
 ```sh
-clojure -M:local:test
-clojure -M:lint
+kbb -M:local:test
+kbb -M:lint
 ```
 
 design-quality: 100.00 on library / compilation / awaiting-grant (2026-08-03).
