@@ -1,0 +1,80 @@
+(ns music.seq
+  "music 判定コア — itonami dapp bundle（pure, :effects #{}）。
+
+  トラックライブラリの判定（正本: src/app_music/model.cljk）:
+
+  - **2 つの capability は分ける**: media/library（列挙）と audio/playback
+    （出力装置）。「再生だけのプレイヤーにライブラリの列挙をさせず、再生
+    しないライブラリブラウザにオーディオ装置を握らせない」（双方向）。
+  - **sortable-artist**: album-artist を優先、コンピレーションは
+    「Various Artists」、無ければ artist。「トラックの artist でソートすると
+    1 枚のアルバムがライブラリ全体に散らばる — 最も報告の多い音楽ライブラリ
+    のバグ」。
+  - **sequence-key = 1000 x disc + track**（disc 既定 1）。disc を掛けると
+    ディスクが順を保ち、共有カーネルに第 2 のソート軸を教える必要が無い。
+  - **id は path**（「ソートし直しを生き残り、play 提案が名指しすべきもの」）。
+
+  sequence-key: 1000*disc + track。track 無しは -1（不明）
+  artist-code の戻り: 0 = album-artist / 1 = Various Artists（コンピ）
+    / 2 = artist / 3 = どれも無い
+  grant-judgment のエラービット（0 = 規則どおり）:
+    1 :over-grant   必要でない capability を付与
+    2 :under-grant  必要なのに付与しない
+  id-is-path: 1 = id に path、0 = タイトル等（違反）
+
+  実行 host はスカラーのみ = KIR v3 / i64/direct ABI（kernel/selfhost 両対応）。
+
+  テストはゼロ引数 test-*、戻り 1/0:
+  <amu> test aiueos/music_seq.cljk"
+  (:export [main sequence-key artist-code grant-judgment id-is-path
+            test-seq test-seq-default test-artist test-grant test-id
+            test-fail-closed]))
+
+(defn main [] :i64
+  0)
+
+(defn sequence-key [disc :i64 track :i64] :i64
+  (if (>= track 0)
+    (+ (* 1000 disc) track)
+    -1))
+
+(defn artist-code [has-album-artist :i64 is-compilation :i64 has-artist :i64] :i64
+  (if (= has-album-artist 1)
+    0
+    (if (= is-compilation 1)
+      1
+      (if (= has-artist 1) 2 3))))
+
+(defn grant-judgment [needs-library :i64 needs-playback :i64 granted-library :i64 granted-playback :i64] :i64
+  (+ (if (and (= granted-library 1) (= needs-library 0)) 1 0)
+     (if (and (= granted-playback 1) (= needs-playback 0)) 1 0)
+     (if (and (= needs-library 1) (= granted-library 0)) 2 0)
+     (if (and (= needs-playback 1) (= granted-playback 0)) 2 0)))
+
+(defn id-is-path [is-path :i64 is-title :i64] :i64
+  (if (and (= is-path 1) (= is-title 0)) 1 0))
+
+;; --- tests（戻り 1 = pass） ------------------------------------------------
+
+(defn test-seq [] :i64
+  ;; 1000 x disc + track（disc 2 track 1 = 2001、disc 1 track 1 = 1001）
+  (if (= (+ (sequence-key 2 1) (sequence-key 1 1)) 3002) 1 0))
+
+(defn test-seq-default [] :i64
+  ;; disc 既定 1。track 無しは -1
+  (if (= (+ (sequence-key 1 5) (sequence-key 3 -1)) 1004) 1 0))
+
+(defn test-artist [] :i64
+  ;; album-artist > Various Artists（コンピ）> artist
+  (if (= (+ (artist-code 1 1 1) (artist-code 0 1 1) (artist-code 0 0 1) (artist-code 0 0 0)) 6) 1 0))
+
+(defn test-grant [] :i64
+  ;; 双方向の分離: 適正付与は 0
+  (if (= (+ (grant-judgment 1 0 1 0) (grant-judgment 0 1 0 1) (grant-judgment 1 1 1 1)) 0) 1 0))
+
+(defn test-id [] :i64
+  (if (= (+ (id-is-path 1 0) (id-is-path 1 1) (id-is-path 0 1)) 1) 1 0))
+
+(defn test-fail-closed [] :i64
+  ;; 再生だけのプレイヤーにライブラリ列挙を与えない（over-grant = 1）
+  (if (= (grant-judgment 0 1 1 1) 1) 1 0))

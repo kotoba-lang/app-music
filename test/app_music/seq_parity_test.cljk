@@ -1,0 +1,28 @@
+(ns app-music.seq-parity-test
+  "aiueos/music_seq.cljk（判定コア）と実物の model.cljk の parity。
+  sortable-artist / sequence-key / capability 分割 / commands が一致する。"
+  (:require [clojure.test :refer [deftest is testing]]
+            [app-music.model :as model]))
+
+(deftest artist-matches-guest
+  (testing "guest test-artist: album-artist > Various Artists（コンピ）> artist"
+    (is (= "AA" (model/sortable-artist {:album-artist "AA" :artist "TA" :compilation? true})))
+    (is (= "Various Artists" (model/sortable-artist {:artist "TA" :compilation? true})))
+    (is (= "TA" (model/sortable-artist {:artist "TA" :compilation? false})))
+    (is (nil? (model/sortable-artist {})))))
+
+(deftest sequence-matches-guest
+  (testing "guest test-seq: 1000 x disc + track（disc 既定 1）"
+    (is (= 2001 (model/sequence-key {:disc 2 :track 1})))
+    (is (= 1001 (model/sequence-key {:track 1})))
+    (is (= 1005 (model/sequence-key {:disc 1 :track 5}))))
+  (testing "guest test-seq-default: track 無しは nil（不明）"
+    (is (nil? (model/sequence-key {:disc 3})))))
+
+(deftest surface-matches-guest
+  (testing "guest test-grant: media/library と audio/playback は双方向に分離"
+    (is (= "media/library" model/library-capability))
+    (is (= "audio/playback" model/playback-capability))
+    (is (not= model/library-capability model/playback-capability)))
+  (testing "guest test-id / test-fail-closed 前提: commands"
+    (is (= #{:play :open :copy-path :export} model/commands))))
